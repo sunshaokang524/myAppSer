@@ -92,7 +92,7 @@ api.get("/swipe", (req, res) => {
   isTokenTimeout(req.headers["authorization"], res);
 fs.readdir("./img", (err, file) => {
    let arr= file.map((item, i) => ({
-      url: path.join('http://192.168.0.2:3000', "./img/" + item).replaceAll('\\','/'),
+      url: 'img/'+item,
       text: item.slice(0,-4),
     }));
     console.log(arr)
