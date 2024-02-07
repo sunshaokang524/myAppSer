@@ -8,14 +8,21 @@ const cors = require("cors");
 const uuid = require("node-uuid");
 const CryptoJS = require("crypto-js");
 const db = require("./api/type");
-
+const path = require("path");
 api.use(cors());
-
+api.use('/img', express.static('img'));
 function encrypt(text, key) {
   return CryptoJS.AES.encrypt(text, key).toString();
 }
 function decrypt(text, key) {
   return CryptoJS.AES.decrypt(text, key).toString(CryptoJS.enc.Utf8).toString();
+}
+function isTokenTimeout(token, res) {
+  jwt.verify(token.slice(7), "wodetokenhenniubi", (err, decode) => {
+    if (err) {
+      res.status(401).json({ error: "请重新登录" });
+    }
+  });
 }
 mongoose.connect(url);
 mongoose.connection.on("connected", function () {
@@ -47,31 +54,53 @@ api.post("/signIn", (req, res) => {
     }
   });
 });
-// decoded = jwt.decode('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY2ODQwNWQwLWMzZDYtMTFlZS04OWU3LTg3YmZlNzM5ODJkMiIsInBob25lIjoiMTMzMTMzNTQyODQiLCJwYXNzd29yZCI6IlUyRnNkR1ZrWDErK3JRUDY3ZlBkb0wxRDA0OFNqWmV6d3d5RFp4R2hLTzg9IiwiaWF0IjoxNzA3MTI1MTkwLCJleHAiOjE3MDcxMjUyMDB9.NeCY68rafUfRBxXJ6UK_769NU8eCXcUs-QNx4JOOQHc', 'wodeappjiushihao');
-// console.log(decoded,'decoded')
-// 登录 
+
+// 登录
 api.post("/login", (req, res) => {
   db.User.find({ phone: req.body.phone }).then((data) => {
     if (data.length > 0) {
-      let pwc = decrypt(data[0].password, "wodeappjiushihao")===req.body.passWord?true:false;
-      let {id,phone,password}=data[0] 
+      let pwc =
+        decrypt(data[0].password, "wodeappjiushihao") === req.body.passWord
+          ? true
+          : false;
+      let { id, phone, password } = data[0];
       res.send({
-        data:pwc? {id,phone,token:jwt.sign({id,phone,password}, 'wodetokenhenniubi', { expiresIn: 10 })}:{},
-        code: 200,
-        message:pwc?'登录成功！':'密码错误，请重新确认！',
+        data: pwc
+          ? {
+              id,
+              phone,
+              token: jwt.sign({ id, phone, password }, "wodetokenhenniubi", {
+                expiresIn: 6 * 60 * 60,
+              }),
+            }
+          : {},
+        code: pwc ? 200 : 406,
+        message: pwc ? "登录成功！" : "密码错误，请重新确认！",
       });
     } else {
       res.send({
         data: data,
-        code: 200,
+        code: 406,
         message: "手机号未注册请确认！",
       });
     }
   });
 });
 
-
-api.get('/test',(req,res)=>{
-  console.log(req['authorization'])
-  res.send('cc')
-})
+// 轮播背景
+api.get("/swipe", (req, res) => {
+  isTokenTimeout(req.headers["authorization"], res);
+fs.readdir("./img", (err, file) => {
+   let arr= file.map((item, i) => ({
+      url: path.join('http://192.168.0.2:3000', "./img/" + item).replaceAll('\\','/'),
+      text: item.slice(0,-4),
+    }));
+    console.log(arr)
+    res.send({
+      data: { imgList: arr },
+      message: "请求成功",
+      code: 200,
+    });
+  });
+ 
+});
