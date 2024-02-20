@@ -10,19 +10,24 @@ const CryptoJS = require("crypto-js");
 const db = require("./api/type");
 const path = require("path");
 api.use(cors());
-api.use('/img', express.static('img'));
+
+api.use("/img", express.static("img"));
 function encrypt(text, key) {
   return CryptoJS.AES.encrypt(text, key).toString();
 }
 function decrypt(text, key) {
   return CryptoJS.AES.decrypt(text, key).toString(CryptoJS.enc.Utf8).toString();
 }
-function isTokenTimeout(token, res) {
+function isTokenTimeout(token, res,handle) {
+
   jwt.verify(token.slice(7), "wodetokenhenniubi", (err, decode) => {
     if (err) {
       res.status(401).json({ error: "请重新登录" });
+    } else {
+      handle()
     }
   });
+
 }
 mongoose.connect(url);
 mongoose.connection.on("connected", function () {
@@ -89,18 +94,36 @@ api.post("/login", (req, res) => {
 
 // 轮播背景
 api.get("/swipe", (req, res) => {
-  isTokenTimeout(req.headers["authorization"], res);
-fs.readdir("./img", (err, file) => {
-   let arr= file.map((item, i) => ({
-      url: 'img/'+item,
-      text: item.slice(0,-4),
-    }));
-    console.log(arr)
-    res.send({
-      data: { imgList: arr },
-      message: "请求成功",
-      code: 200,
+  isTokenTimeout(req.headers["authorization"], res, () => {
+    fs.readdir("./img", (err, file) => {
+      let arr = file.map((item, i) => ({
+        url: "img/" + item,
+        text: item.slice(0, -4),
+      }));
+
+      res.send({
+        data: { imgList: arr },
+        message: "请求成功",
+        code: 200,
+      });
     });
   });
- 
 });
+api.get("/personInfo",(req,res)=>{
+  db.Personalinfo.find({id:req.body.id}).then((data)=>{
+    if(data.length>0){
+      res.send({
+        data:data[0],
+        code:200,
+        message:'请求成功'
+      })
+      console.log(data,'个人信息')
+    }else{
+      res.send({
+        data:{},
+        code:406,
+        message:'还未填写个人信息'
+      })
+    }
+  })
+})

@@ -6,5 +6,14 @@ let userSchema = new mongoose.Schema({
   id: String,
 });
 const User= mongoose.model("userinfos", userSchema);
-
-module.exports = { User };
+let personalinfoSchema = new mongoose.Schema({
+  name: String,
+  sex: String,
+  phone: String,
+  age: String,
+  nativePlace:String,
+  avatar:String,
+  id:String,
+});
+const Personalinfo= mongoose.model("personalinfos", personalinfoSchema);
+module.exports = { User,Personalinfo };
