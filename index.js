@@ -9,6 +9,7 @@ const uuid = require("node-uuid");
 const CryptoJS = require("crypto-js");
 const db = require("./api/type");
 const path = require("path");
+
 api.use(cors());
 
 api.use("/img", express.static("img"));
@@ -18,25 +19,24 @@ function encrypt(text, key) {
 function decrypt(text, key) {
   return CryptoJS.AES.decrypt(text, key).toString(CryptoJS.enc.Utf8).toString();
 }
-function isTokenTimeout(token, res,handle) {
-
+function isTokenTimeout(token, res, handle) {
   jwt.verify(token.slice(7), "wodetokenhenniubi", (err, decode) => {
     if (err) {
       res.status(401).json({ error: "请重新登录" });
     } else {
-      handle()
+      handle();
     }
   });
-
 }
 mongoose.connect(url);
 mongoose.connection.on("connected", function () {
   console.log("连接成功：", url);
 });
 const bodyParser = require("body-parser");
-api.use(bodyParser.json());
-api.use(bodyParser.urlencoded({ extended: false }));
-api.listen(5000, "192.168.255.174", () => {
+// api.use(bodyParser.json());
+api.use(bodyParser.json({limit:'50mb'}));
+api.use(bodyParser.urlencoded({ extended: true,limit:'50mb'}));
+api.listen(5000, "192.168.0.2", () => {
   console.log("服务器启动");
 });
 
@@ -91,19 +91,18 @@ api.post("/login", (req, res) => {
     }
   });
 });
-console.log(0)
+
 // 轮播背景
 api.get("/swipe", (req, res) => {
-  console.log(1)
+  console.log(1);
   isTokenTimeout(req.headers["authorization"], res, () => {
-    console.log(2)
 
     fs.readdir("./img", (err, file) => {
       let arr = file.map((item, i) => ({
         url: "img/" + item,
         text: item.slice(0, -4),
       }));
-      console.log(arr);
+
 
       res.send({
         data: { imgList: arr },
@@ -113,21 +112,29 @@ api.get("/swipe", (req, res) => {
     });
   });
 });
-api.get("/personInfo",(req,res)=>{
-  db.Personalinfo.find({id:req.body.id}).then((data)=>{
-    if(data.length>0){
+api.get("/personInfo", (req, res) => {
+  console.log(req.query);
+  db.Personalinfo.find({ id: req.query.id }).then((data) => {
+    console.log(data);
+    if (data.length > 0) {
       res.send({
-        data:data[0],
-        code:200,
-        message:'请求成功'
-      })
-      console.log(data,'个人信息')
-    }else{
+        data: data[0],
+        code: 200,
+        message: "请求成功",
+      });
+      console.log(data, "个人信息");
+    } else {
       res.send({
-        data:{},
-        code:406,
-        message:'还未填写个人信息'
-      })
+        data: {},
+        code: 406,
+        message: "还未填写个人信息",
+      });
     }
-  })
-})
+  });
+});
+api.post("/personInfo", (req, res) => {
+
+  let u = new db.Personalinfo(req.body);
+  u.save();
+  res.send({ data: req.body, code: 200, message: "请求成功" });
+});
