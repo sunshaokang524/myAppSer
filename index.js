@@ -1,5 +1,6 @@
 const express = require("express");
 const fs = require("fs");
+const fsp = require("fs").promises;
 const api = express();
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
@@ -9,6 +10,7 @@ const uuid = require("node-uuid");
 const CryptoJS = require("crypto-js");
 const db = require("./api/type");
 const path = require("path");
+const AdmZip = require("adm-zip");
 
 api.use(cors());
 
@@ -32,10 +34,11 @@ mongoose.connect(url);
 mongoose.connection.on("connected", function () {
   console.log("连接成功：", url);
 });
+
 const bodyParser = require("body-parser");
 // api.use(bodyParser.json());
-api.use(bodyParser.json({limit:'50mb'}));
-api.use(bodyParser.urlencoded({ extended: true,limit:'50mb'}));
+api.use(bodyParser.json({ limit: "50mb" }));
+api.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
 api.listen(5000, "192.168.0.2", () => {
   console.log("服务器启动");
 });
@@ -93,23 +96,46 @@ api.post("/login", (req, res) => {
 });
 
 // 轮播背景
-api.get("/swipe", (req, res) => {
-  console.log(1);
+api.get("/dynamicstate", (req, res) => {
   isTokenTimeout(req.headers["authorization"], res, () => {
+    const zipFilePath = path.join(__dirname, "/img/all.zip"); // 假设压缩包位于当前目录
+    const extractPath = path.join(__dirname, "/img/extracted");
+    let arr = [];
 
-    fs.readdir("./img", (err, file) => {
-      let arr = file.map((item, i) => ({
-        url: "img/" + item,
-        text: item.slice(0, -4),
-      }));
-
-
-      res.send({
-        data: { imgList: arr },
-        message: "请求成功",
-        code: 200,
+    if (!fs.existsSync(extractPath)) {
+      fs.mkdirSync(extractPath);
+      const AdmZip = require("adm-zip");
+      const zip = new AdmZip(zipFilePath);
+      zip.extractAllTo(extractPath, true);
+      db.Dynamicstate.find().then((data) => {
+        data.forEach(function (entry, i) {
+          const imagePath = path.join(extractPath, entry.imgPath[0]); // 假设图片文件名为image.jpg
+          const imageBuffer = fs.readFileSync(imagePath).toString("base64");
+          arr.push({img:["data:image/jpeg;base64," + imageBuffer],content:entry.content,time:entry.time,isLike:entry.isLike,nickName:entry.nickName});
+        });
+     
+        fsp
+        .rm(extractPath, { recursive: true, force: true })
+        .then(() => {
+          console.log(
+            "Directory and its contents deleted successfully:",
+            extractPath
+          );
+        })
+        .catch((err) => {
+          console.error("Error deleting directory:", err);
+        });
+        res.send({
+          data: { imgList: arr },
+          message: "请求成功",
+          code: 200,
+        });
       });
-    });
+  
+     
+    } // 解压目录
+
+
   });
 });
 api.get("/personInfo", (req, res) => {
@@ -133,7 +159,6 @@ api.get("/personInfo", (req, res) => {
   });
 });
 api.post("/personInfo", (req, res) => {
-
   let u = new db.Personalinfo(req.body);
   u.save();
   res.send({ data: req.body, code: 200, message: "请求成功" });
