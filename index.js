@@ -111,7 +111,7 @@ api.get("/dynamicstate", (req, res) => {
         data.forEach(function (entry, i) {
           const imagePath = path.join(extractPath, entry.imgPath[0]); // 假设图片文件名为image.jpg
           const imageBuffer = fs.readFileSync(imagePath).toString("base64");
-          arr.push({img:["data:image/jpeg;base64," + imageBuffer],content:entry.content,time:entry.time,isLike:entry.isLike,nickName:entry.nickName});
+          arr.push({img:["data:image/jpeg;base64," + imageBuffer],content:entry.content,time:entry.time,isLike:entry.isLike,nickname:entry.nickname});
         });
      
         fsp
