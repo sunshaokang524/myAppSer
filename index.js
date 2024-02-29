@@ -16,6 +16,7 @@ api.use(cors());
 
 api.use("/img", express.static("img"));
 function encrypt(text, key) {
+  console.log(text, key);
   return CryptoJS.AES.encrypt(text, key).toString();
 }
 function decrypt(text, key) {
@@ -29,6 +30,14 @@ function isTokenTimeout(token, res, handle) {
       handle();
     }
   });
+}
+async function saveImage(filePath, imageBuffer) {
+  try {
+    await fsp.writeFile(filePath, imageBuffer, "binary");
+    console.log("Image saved successfully to:", filePath);
+  } catch (err) {
+    console.error("Error saving image:", err);
+  }
 }
 mongoose.connect(url);
 mongoose.connection.on("connected", function () {
@@ -56,6 +65,7 @@ api.post("/signIn", (req, res) => {
         id: uuid1,
         phone: req.body.userPhone,
         password: req.body.passWord,
+        account: req.body.userPhone.slice(0, 3) + data.length,
       });
       u.save();
       res.send({ data: {}, code: 200, message: "注册成功！" });
@@ -71,12 +81,13 @@ api.post("/login", (req, res) => {
         decrypt(data[0].password, "wodeappjiushihao") === req.body.passWord
           ? true
           : false;
-      let { id, phone, password } = data[0];
+      let { id, phone, password, account } = data[0];
       res.send({
         data: pwc
           ? {
               id,
               phone,
+              account,
               token: jwt.sign({ id, phone, password }, "wodetokenhenniubi", {
                 expiresIn: 6 * 60 * 60,
               }),
@@ -95,11 +106,12 @@ api.post("/login", (req, res) => {
   });
 });
 
-// 轮播背景
+const zipFilePath = path.join(__dirname, "/img/all.zip"); // 假设压缩包位于当前目录
+const extractPath = path.join(__dirname, "/img/extracted");
+const basePath = path.join(__dirname, "/img/");
+// 获取动态
 api.get("/dynamicstate", (req, res) => {
   isTokenTimeout(req.headers["authorization"], res, () => {
-    const zipFilePath = path.join(__dirname, "/img/all.zip"); // 假设压缩包位于当前目录
-    const extractPath = path.join(__dirname, "/img/extracted");
     let arr = [];
 
     if (!fs.existsSync(extractPath)) {
@@ -107,37 +119,93 @@ api.get("/dynamicstate", (req, res) => {
       const AdmZip = require("adm-zip");
       const zip = new AdmZip(zipFilePath);
       zip.extractAllTo(extractPath, true);
-      db.Dynamicstate.find().then((data) => {
+      db.Dynamicstate.find().sort({ time: -1 })
+      .then((data) => {
         data.forEach(function (entry, i) {
-          const imagePath = path.join(extractPath, entry.imgPath[0]); // 假设图片文件名为image.jpg
-          const imageBuffer = fs.readFileSync(imagePath).toString("base64");
-          arr.push({img:["data:image/jpeg;base64," + imageBuffer],content:entry.content,time:entry.time,isLike:entry.isLike,nickname:entry.nickname});
+          let picList=[]
+          console.log(entry.imgPath)
+          if(entry.imgPath.length>0){
+            entry.imgPath.forEach(function (pic, i) {
+              console.log(pic)
+              const imagePath = path.join(extractPath, pic); // 假设图片文件名为image.jpg
+              const imageBuffer = fs.readFileSync(imagePath).toString("base64");
+              picList.push("data:image/jpeg;base64," + imageBuffer)
+            })
+          }
+          arr.push({
+            img: picList,
+            content: entry.content,
+            time: entry.time,
+            isLike: false,
+            nickname: entry.nickname,
+          });
         });
-     
+
         fsp
-        .rm(extractPath, { recursive: true, force: true })
-        .then(() => {
-          console.log(
-            "Directory and its contents deleted successfully:",
-            extractPath
-          );
-        })
-        .catch((err) => {
-          console.error("Error deleting directory:", err);
-        });
+          .rm(extractPath, { recursive: true, force: true })
+          .then(() => {
+            console.log(
+              "Directory and its contents deleted successfully:",
+              extractPath
+            );
+          })
+          .catch((err) => {
+            console.error("Error deleting directory:", err);
+          });
         res.send({
           data: { imgList: arr },
           message: "请求成功",
           code: 200,
         });
       });
-  
-     
     } // 解压目录
-
-
   });
 });
+// 添加动态
+api.post("/addDynamic", (req, res) => {
+  const { content, imgPath, id } = req.body;
+  let arr=[]
+  imgPath.forEach(function (pic, i) {
+    const base64Data = pic.url.replace(/^data:image\/\w+;base64,/, "");
+    const dataBuffer = Buffer.from(base64Data, "base64");
+    let picName=id+new Date().getTime()+pic.name
+    const tempFilePath = `./img/${picName}`; // 临时文件路径  
+    fs.writeFileSync(tempFilePath, dataBuffer);  
+    const zip = new AdmZip('./img/all.zip');  
+    // 图片在ZIP文件中的名称  
+    const imageNameInZip = 'all';  
+    // 将图片添加到ZIP文件中  
+    zip.addLocalFile(tempFilePath, imageNameInZip);  
+    fs.unlinkSync(tempFilePath);  
+    // 将修改后的ZIP文件内容写回磁盘  
+    zip.writeZip('./img/all.zip');  
+    arr.push('all/'+ picName)
+    
+  })
+    
+  
+  db.Personalinfo.find({id}).then(data=>{
+    const {account, nickname}= data[0]
+    console.log(account, nickname,encrypt( String(new Date().getTime()),account))
+    let u = new db.Dynamicstate({
+      nickname,
+      content,
+      id,
+      imgPath:arr,
+      time:new Date().getTime(),
+      account,
+      infoId:encrypt( String(new Date().getTime()),account)
+    }) 
+    u.save();
+    res.send({
+      data: { content, id,account, nickname },
+      code: 200,
+      message: "请求成功",
+    });
+  })
+});
+
+// 获取个人信息
 api.get("/personInfo", (req, res) => {
   console.log(req.query);
   db.Personalinfo.find({ id: req.query.id }).then((data) => {
@@ -158,8 +226,31 @@ api.get("/personInfo", (req, res) => {
     }
   });
 });
+// 添加个人信息
 api.post("/personInfo", (req, res) => {
   let u = new db.Personalinfo(req.body);
   u.save();
   res.send({ data: req.body, code: 200, message: "请求成功" });
 });
+// 个人喜欢 删除
+api.post("/myLick",(req,res)=>{
+  let flag
+  db.MyLick.find({id:req.body.id}).then(data=>{
+    flag=data.length>0
+  })
+if(req.body.type==true){
+  if(flag){
+
+  }else{
+    let u = new db.MyLick({id:req.body.id,likeList:[req.body.infoId]});
+    u.save();
+
+  }
+}else{
+  if(flag){
+    db.MyLick.deleteOne({id:req.body.id}).then(data=>{
+      
+    })
+  }
+}
+})

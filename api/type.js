@@ -14,16 +14,22 @@ let personalinfoSchema = new mongoose.Schema({
   nativePlace: String,
   avatar: String,
   id: String,
+  account: String,
 });
 const Personalinfo = mongoose.model("personalinfos", personalinfoSchema);
 let dynamicstateSchema = new mongoose.Schema({
   nickname: String,
-  avatar: String,
+  infoId: String,
   id: String,
   time: String,
-  isLike: Boolean,
+  account: String,
   content: String,
   imgPath: Array,
 });
 const Dynamicstate = mongoose.model("dynamicstates", dynamicstateSchema);
-module.exports = { User, Personalinfo,Dynamicstate };
+let myLikeSchema = new mongoose.Schema({
+  id:String,
+  likeList:Array
+})
+const MyLike = mongoose.model("mylikes", myLikeSchema);
+module.exports = { User, Personalinfo,Dynamicstate,MyLike};
