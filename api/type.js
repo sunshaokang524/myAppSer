@@ -4,6 +4,7 @@ let userSchema = new mongoose.Schema({
   phone: String,
   password: String,
   id: String,
+  account: String,
 });
 const User = mongoose.model("userinfos", userSchema);
 let personalinfoSchema = new mongoose.Schema({
@@ -32,4 +33,9 @@ let myLikeSchema = new mongoose.Schema({
   likeList:Array
 })
 const MyLike = mongoose.model("mylikes", myLikeSchema);
-module.exports = { User, Personalinfo,Dynamicstate,MyLike};
+let MyAttentionSchema = new mongoose.Schema({
+  id:String,
+  attentionList:Array
+})
+const MyAttention = mongoose.model("attentions", MyAttentionSchema);
+module.exports = { User, Personalinfo,Dynamicstate,MyLike,MyAttention};

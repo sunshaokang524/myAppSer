@@ -25,7 +25,7 @@ function decrypt(text, key) {
   return CryptoJS.AES.decrypt(text, key).toString(CryptoJS.enc.Utf8).toString();
 }
 // 函数：isTokenTimeout，用于验证token是否过期
- // 参数：token，res，handle
+// 参数：token，res，handle
 function isTokenTimeout(token, res, handle) {
   // 使用jwt.verify验证token，并传入验证的参数，以及回调函数
   jwt.verify(token.slice(7), "wodetokenhenniubi", (err, decode) => {
@@ -59,7 +59,7 @@ api.listen(5000, "192.168.0.2", () => {
 
 // 注册
 api.post("/signIn", (req, res) => {
-// 查询数据库中是否有该手机号的用户
+  // 查询数据库中是否有该手机号的用户
   db.User.find({ phone: req.body.userPhone }).then((data) => {
     if (data.length > 0) {
       res.send({ data: {}, code: 406, message: "手机号已被注册" });
@@ -69,11 +69,15 @@ api.post("/signIn", (req, res) => {
       const uuid1 = uuid.v1();
       // 对密码进行加密
       req.body.passWord = encrypt(req.body.passWord, "wodeappjiushihao");
+      console.log(
+        req.body.userPhone.slice(0, 3) + (data.length + 1),
+        req.body.userPhone
+      );
       let u = new db.User({
         id: uuid1,
         phone: req.body.userPhone,
         password: req.body.passWord,
-        account: req.body.userPhone.slice(0, 3) + data.length,
+        account: req.body.userPhone.slice(0, 3) + (data.length + 1),
       });
       u.save();
       res.send({ data: {}, code: 200, message: "注册成功！" });
@@ -83,7 +87,7 @@ api.post("/signIn", (req, res) => {
 
 // 登录
 api.post("/login", (req, res) => {
- db.User.find({ phone: req.body.phone }).then((data) => {
+  db.User.find({ phone: req.body.phone }).then((data) => {
     // 判断手机号是否已注册
     if (data.length > 0) {
       // 判断密码是否正确
@@ -124,7 +128,7 @@ const extractPath = path.join(__dirname, "/img/extracted");
 const basePath = path.join(__dirname, "/img/");
 // 获取动态
 api.get("/dynamicstate", (req, res) => {
- isTokenTimeout(req.headers["authorization"], res, async() => {
+  isTokenTimeout(req.headers["authorization"], res, async () => {
     let arr = [];
 
     // 判断解压目录是否存在，不存在则创建
@@ -133,18 +137,18 @@ api.get("/dynamicstate", (req, res) => {
       const AdmZip = require("adm-zip");
       const zip = new AdmZip(zipFilePath);
       zip.extractAllTo(extractPath, true);
-      let sum
-      try{
-
-         sum = await db.Dynamicstate.countDocuments()
-      }catch(err){
-         console.log(err)
+      let sum;
+      try {
+        sum = await db.Dynamicstate.countDocuments();
+      } catch (err) {
+        console.log(err);
       }
       // 查询数据
       db.Dynamicstate.find()
-        .sort({ time: -1 }).skip((req.query.pageNum-1)*req.query.pageSize).limit(req.query.pageSize)
+        .sort({ time: -1 })
+        .skip((req.query.pageNum - 1) * req.query.pageSize)
+        .limit(req.query.pageSize)
         .then((data) => {
-
           data.forEach(function (entry, i) {
             let picList = [];
 
@@ -166,6 +170,7 @@ api.get("/dynamicstate", (req, res) => {
               isLike: false,
               nickname: entry.nickname,
               infoId: entry.infoId,
+              account: entry.account,
             });
           });
 
@@ -181,27 +186,25 @@ api.get("/dynamicstate", (req, res) => {
             .catch((err) => {
               console.error("Error deleting directory:", err);
             });
-            
+
           // 判断是否点赞
           db.MyLike.find({ id: req.query.id }).then((data) => {
-            if(data.length === 0){
+            if (data.length === 0) {
               res.send({
-                data: { imgList: arr,sum:sum },
+                data: { imgList: arr, sum: sum },
                 message: "请求成功",
                 code: 200,
               });
-            }else{
- 
+            } else {
               arr.forEach((item, i) => {
                 item.isLike = data[0].likeList.includes(item.infoId);
               });
               res.send({
-                data: { imgList: arr,sum:sum},
+                data: { imgList: arr, sum: sum },
                 message: "请求成功",
                 code: 200,
               });
             }
-           
           });
         });
     } // 解压目录
@@ -209,7 +212,7 @@ api.get("/dynamicstate", (req, res) => {
 });
 // 添加动态
 api.post("/addDynamic", (req, res) => {
- const { content, imgPath, id } = req.body;
+  const { content, imgPath, id } = req.body;
   let arr = [];
   imgPath.forEach(function (pic, i) {
     const base64Data = pic.url.replace(/^data:image\/\w+;base64,/, "");
@@ -251,7 +254,7 @@ api.post("/addDynamic", (req, res) => {
 
 // 获取个人信息
 api.get("/personInfo", (req, res) => {
-// 查询数据库中id为req.query.id的Personalinfo数据
+  // 查询数据库中id为req.query.id的Personalinfo数据
   db.Personalinfo.find({ id: req.query.id }).then((data) => {
     if (data.length > 0) {
       res.send({
@@ -276,10 +279,10 @@ api.post("/personInfo", (req, res) => {
 });
 // 个人喜欢 删除
 api.post("/myLike", (req, res) => {
- let flag;
- db.MyLike.find({ id: req.body.id }).then((data) => {
+  let flag;
+  db.MyLike.find({ id: req.body.id }).then((data) => {
     flag = data.length > 0;
-   if (req.body.type == true) {
+    if (req.body.type == true) {
       if (flag) {
         // 更新收藏信息
         db.MyLike.updateOne(
@@ -292,9 +295,12 @@ api.post("/myLike", (req, res) => {
         // 插入收藏信息
         let u = new db.MyLike({ id: req.body.id, likeList: [req.body.infoId] });
         u.save();
-       
       }
-      res.send({ data: {infoId:req.body.infoId}, code: 200, message: "收藏成功！" });
+      res.send({
+        data: { infoId: req.body.infoId },
+        code: 200,
+        message: "收藏成功！",
+      });
     } else {
       if (flag) {
         // 更新收藏信息
@@ -302,10 +308,77 @@ api.post("/myLike", (req, res) => {
           { id: req.body.id },
           { $pull: { likeList: req.body.infoId } }
         ).then((data) => {
-          res.send({ data: {infoId:req.body.infoId}, code: 200, message: "取消收藏！" });
+          res.send({
+            data: { infoId: req.body.infoId },
+            code: 200,
+            message: "取消收藏！",
+          });
         });
       }
     }
   });
+});
+// 获取其他人信息
+api.get("/otherInfo", (req, res) => {
+  db.Personalinfo.find({ account: req.query.account }).then((data) => {
+    const { account, nickName, sex, age, avatar, nativePlace } = data[0];
+    db.MyAttention.find({ id: req.query.id }).then((data) => {
+      res.send({
+        data: {
+          account,
+          nickName,
+          sex,
+          age,
+          avatar,
+          nativePlace,
+          isattention:
+            data[0]?.attentionList.indexOf(req.query.account) > -1
+              ? true
+              : false,
+        },
+        code: 200,
+        message: "请求成功",
+      });
+    });
+  });
+});
 
+// 添加个人关注
+api.post("/addAttention", (req, res) => {
+  console.log(req.body);
+  let flag;
+  console.log(db.MyAttention);
+  db.MyAttention.find({ id: req.body.id }).then((data) => {
+    console.log(data);
+    flag = data.length > 0;
+    if (req.body.type == true) {
+      if (flag) {
+        // 更新收藏信息
+        db.MyAttention.updateOne(
+          { id: req.body.id },
+          { $push: { attentionList: req.body.account } }
+        ).then((res) => { 
+          console.log(res);
+        });
+      } else {
+        // 插入收藏信息
+        let u = new db.MyAttention({
+          id: req.body.id,
+          attentionList: [req.body.account],
+        });
+        u.save();
+      }
+      res.send({ data: {}, code: 200, message: "关注成功！" });
+    } else {
+      if (flag) {
+        // 更新收藏信息
+        db.MyAttention.updateOne(
+          { id: req.body.id },
+          { $pull: { attentionList: req.body.account } }
+        ).then((data) => {
+          res.send({ data: {}, code: 200, message: "取消关注！" });
+        });
+      }
+    }
+  });
 });
