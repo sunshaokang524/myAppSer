@@ -15,6 +15,17 @@ const AdmZip = require("adm-zip");
 api.use(cors());
 
 api.use("/img", express.static("img"));
+mongoose.connect(url);
+mongoose.connection.on("connected", function () {
+  console.log("连接成功：", url);
+});
+
+const bodyParser = require("body-parser");
+api.use(bodyParser.json({ limit: "50mb" }));
+api.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
+api.listen(5000, "192.168.0.2", () => {
+  console.log("服务器启动");
+});
 // 加密函数，text为要加密的文本，key为加密的密钥
 function encrypt(text, key) {
   return CryptoJS.AES.encrypt(text, key).toString();
@@ -45,17 +56,35 @@ async function saveImage(filePath, imageBuffer) {
     console.error("Error saving image:", err);
   }
 }
-mongoose.connect(url);
-mongoose.connection.on("connected", function () {
-  console.log("连接成功：", url);
-});
+// 添加信息列表
+function addInfoList(myid, type, content, sendPerId, time) {
+  console.log("添加信息列表", { myid, type, content, sendPerId, time });
+  let arr =[]
+  let item = {
+    myid, type, content, sendPerId, time,isRead:false
+  }
+  db.MyInfoList.find({ id: myid }).then((data) => {
 
-const bodyParser = require("body-parser");
-api.use(bodyParser.json({ limit: "50mb" }));
-api.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
-api.listen(5000, "192.168.0.2", () => {
-  console.log("服务器启动");
-});
+    console.log("查询到的信息列表", data);
+    if (data.length == 0) {
+      arr.push(item)
+      console.log("创建新的信息列表", new db.MyInfoList());
+
+      let u = new db.MyInfoList({
+        id: myid,
+        infoList:arr
+      });
+      u.save();
+    } else {
+      db.MyInfoList.updateOne(
+        { id: myid },
+        {
+          $push: { infoList: item },
+        }
+      ).then((res) => {});
+    }
+  });
+}
 
 // 注册
 api.post("/signIn", (req, res) => {
@@ -321,23 +350,31 @@ api.post("/myLike", (req, res) => {
 // 获取其他人信息
 api.get("/otherInfo", (req, res) => {
   db.Personalinfo.find({ account: req.query.account }).then((data) => {
-    const { account, nickName, sex, age, avatar, nativePlace } = data[0];
+    const { account, nickName, sex, age, avatar, nativePlace, id } = data[0];
     db.MyAttention.find({ id: req.query.id }).then((data) => {
-      res.send({
-        data: {
-          account,
-          nickName,
-          sex,
-          age,
-          avatar,
-          nativePlace,
-          isattention:
-            data[0]?.attentionList.indexOf(req.query.account) > -1
-              ? true
-              : false,
-        },
-        code: 200,
-        message: "请求成功",
+      db.Friends.find({ cust_id: req.query.id }).then((item) => {
+        let isFriend = [];
+        if (item.length > 0) {
+          isFriend = item[0].friends_list.filter((it) => it.friends_id == id);
+        }
+
+        res.send({
+          data: {
+            account,
+            nickName,
+            sex,
+            age,
+            avatar,
+            nativePlace,
+            isattention:
+              data[0]?.attentionList.indexOf(req.query.account) > -1
+                ? true
+                : false,
+            isFriend: isFriend.length > 0 ? isFriend[0].state : "no",
+          },
+          code: 200,
+          message: "请求成功",
+        });
       });
     });
   });
@@ -345,11 +382,9 @@ api.get("/otherInfo", (req, res) => {
 
 // 添加个人关注
 api.post("/addAttention", (req, res) => {
-  console.log(req.body);
   let flag;
-  console.log(db.MyAttention);
+
   db.MyAttention.find({ id: req.body.id }).then((data) => {
-    console.log(data);
     flag = data.length > 0;
     if (req.body.type == true) {
       if (flag) {
@@ -357,7 +392,7 @@ api.post("/addAttention", (req, res) => {
         db.MyAttention.updateOne(
           { id: req.body.id },
           { $push: { attentionList: req.body.account } }
-        ).then((res) => { 
+        ).then((res) => {
           console.log(res);
         });
       } else {
@@ -382,3 +417,162 @@ api.post("/addAttention", (req, res) => {
     }
   });
 });
+
+// 添加好友
+api.post("/addFriends", (req, res) => {
+  db.Personalinfo.find({ account: req.body.account }).then((data) => {
+    // data[0].id
+    db.Friends.find({ cust_id: req.body.id }).then((item) => {
+      if (item.length > 0) {
+        //检查是否已经存在该id的记录
+        let flag = item[0].friends_list.filter((it) => {
+          return it.friends_id === data[0].id;
+        });
+        if (flag.length > 0) {
+          if (flag[0].state === "pending") {
+            res.send({
+              data: {},
+              code: 200,
+              message: "已添加好友，请等待对方同意！",
+            });
+          } else if (flag[0].state === "agree") {
+            res.send({ data: {}, code: 200, message: "已添加好友！" });
+          } else if (flag[0].state === "refuse") {
+            res.send({
+              data: {},
+              code: 200,
+              message: "对方已拒绝添加你为好友！",
+            });
+          }
+        } else {
+          db.Friends.updateOne(
+            { cust_id: req.body.id },
+            {
+              $push: {
+                friends_list: {
+                  friends_id: data[0].id,
+                  relation: "initiative", //主动
+                  state: "pending",
+                },
+              },
+            }
+          );
+          db.Friends.find({ cust_id: data[0].id }).then((info) => {
+            if (info.length > 0) {
+              //删除已存在的请求
+              db.Friends.updateOne(
+                { cust_id: data[0].id },
+                {
+                  $push: {
+                    friends_list: {
+                      friends_id: req.body.id,
+                      relation: "passivity", //被动
+                      state: "pending",
+                    },
+                  },
+                }
+              );
+            } else {
+              let v = new db.Friends({
+                cust_id: data[0].id,
+                friends_list: [
+                  {
+                    friends_id: req.body.id,
+                    relation: "passivity", // 被动
+                    state: "pending",
+                  },
+                ],
+              });
+              v.save();
+            }
+            addInfoList(
+              data[0].id,
+              "0",
+              "请求添加好友",
+              req.body.id,
+              new Date()
+            );
+          });
+          res.send({
+            data: {},
+            code: 200,
+            message: "已发出好友请求，请等待对方同意",
+          });
+        }
+      } else {
+        let u = new db.Friends({
+          cust_id: req.body.id,
+          friends_list: [
+            {
+              friends_id: data[0].id,
+              relation: "initiative", //主动
+              state: "pending",
+            },
+          ],
+        });
+
+        u.save();
+        db.Friends.find({ cust_id: data[0].id }).then((info) => {
+          if (info.length > 0) {
+            db.Friends.updateOne(
+              { cust_id: data[0].id },
+              {
+                $push: {
+                  friends_list: {
+                    friends_id: req.body.id,
+                    relation: "passivity", //被动
+                    state: "pending",
+                  },
+                },
+              }
+            );
+          } else {
+            let v = new db.Friends({
+              cust_id: data[0].id,
+              friends_list: [
+                {
+                  friends_id: req.body.id,
+                  relation: "passivity", // 被动
+                  state: "pending",
+                },
+              ],
+            });
+            v.save();
+          }
+          addInfoList(data[0].id, "0", "请求添加好友", req.body.id, new Date());
+          res.send({
+            data: {},
+            code: 200,
+            message: "已发出好友请求，请等待对方同意",
+          });
+        });
+      }
+    });
+  });
+});
+
+// 查看好友信息
+
+api.post("/friendsInfo", (req, res) => {
+  db.Friends.find({ cust_id: req.query.id }).then((data) => {
+    if (data.length === 0) {
+      res.send({ data: item, code: 200, message: "暂无消息" });
+    }
+    let item = data[0].friends_list.filter(
+      (v) => v.relation === "initiative" && state === "pending"
+    );
+    console.log(item);
+    res.send({ data: item, code: 200, message: "取消关注！" });
+  });
+});
+
+
+//获取好友消息
+api.get('/getInfo',(req,res)=>{
+  isTokenTimeout(req.headers["authorization"], res, async () => {
+    db.MyInfoList.find({id:req.query.id}).then(data=>{
+      res.send({data:data,code:200,message:'获取成功'})
+    })
+    
+  })
+})
