@@ -23,7 +23,7 @@ mongoose.connection.on("connected", function () {
 const bodyParser = require("body-parser");
 api.use(bodyParser.json({ limit: "50mb" }));
 api.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
-api.listen(5000, "192.168.0.2", () => {
+api.listen(5000, "192.168.0.3", () => {
   console.log("服务器启动");
 });
 // 加密函数，text为要加密的文本，key为加密的密钥
@@ -58,31 +58,44 @@ async function saveImage(filePath, imageBuffer) {
 }
 // 添加信息列表
 function addInfoList(myid, type, content, sendPerId, time) {
+  let obj = {
+    time,
+    type,
+  };
   console.log("添加信息列表", { myid, type, content, sendPerId, time });
-  let arr =[]
-  let item = {
-    myid, type, content, sendPerId, time,isRead:false
-  }
-  db.MyInfoList.find({ id: myid }).then((data) => {
 
-    console.log("查询到的信息列表", data);
-    if (data.length == 0) {
-      arr.push(item)
-      console.log("创建新的信息列表", new db.MyInfoList());
+  let arr = [];
+  db.Personalinfo.find({ id: sendPerId }).then((data) => {
+    console.log(data[0]);
+    let item = {
+      myid,
+      type,
+      content,
+      sendNickName: data[0].nickname,
+      sendAccount: data[0].account,
+      time,
+      isRead: false,
+      infoId: encrypt(JSON.stringify(obj), myid),
+    };
+    db.MyInfoList.find({ id: myid }).then((data) => {
+      console.log("查询到的信息列表", data);
+      if (data.length == 0) {
+        arr.push(item);
 
-      let u = new db.MyInfoList({
-        id: myid,
-        infoList:arr
-      });
-      u.save();
-    } else {
-      db.MyInfoList.updateOne(
-        { id: myid },
-        {
-          $push: { infoList: item },
-        }
-      ).then((res) => {});
-    }
+        let u = new db.MyInfoList({
+          id: myid,
+          infoList: arr,
+        });
+        u.save();
+      } else {
+        db.MyInfoList.updateOne(
+          { id: myid },
+          {
+            $push: { infoList: { $each: [item], $position: 0 } },
+          }
+        ).then((res) => {});
+      }
+    });
   });
 }
 
@@ -456,7 +469,7 @@ api.post("/addFriends", (req, res) => {
                 },
               },
             }
-          );
+          ).then(res=>{});
           db.Friends.find({ cust_id: data[0].id }).then((info) => {
             if (info.length > 0) {
               //删除已存在的请求
@@ -471,7 +484,7 @@ api.post("/addFriends", (req, res) => {
                     },
                   },
                 }
-              );
+              ).then(res=>{});
             } else {
               let v = new db.Friends({
                 cust_id: data[0].id,
@@ -488,9 +501,9 @@ api.post("/addFriends", (req, res) => {
             addInfoList(
               data[0].id,
               "0",
-              "请求添加好友",
+              "请求添加您为好友",
               req.body.id,
-              new Date()
+              new Date().getTime()
             );
           });
           res.send({
@@ -513,6 +526,7 @@ api.post("/addFriends", (req, res) => {
 
         u.save();
         db.Friends.find({ cust_id: data[0].id }).then((info) => {
+          console.log(info, "dasdasd");
           if (info.length > 0) {
             db.Friends.updateOne(
               { cust_id: data[0].id },
@@ -525,7 +539,7 @@ api.post("/addFriends", (req, res) => {
                   },
                 },
               }
-            );
+            ).then((res) => {});
           } else {
             let v = new db.Friends({
               cust_id: data[0].id,
@@ -539,7 +553,13 @@ api.post("/addFriends", (req, res) => {
             });
             v.save();
           }
-          addInfoList(data[0].id, "0", "请求添加好友", req.body.id, new Date());
+          addInfoList(
+            data[0].id,
+            "0",
+            "请求您为添加好友",
+            req.body.id,
+            new Date().getTime()
+          );
           res.send({
             data: {},
             code: 200,
@@ -566,13 +586,80 @@ api.post("/friendsInfo", (req, res) => {
   });
 });
 
-
 //获取好友消息
-api.get('/getInfo',(req,res)=>{
+api.get("/getInfo", (req, res) => {
   isTokenTimeout(req.headers["authorization"], res, async () => {
-    db.MyInfoList.find({id:req.query.id}).then(data=>{
-      res.send({data:data,code:200,message:'获取成功'})
-    })
-    
-  })
-})
+    db.MyInfoList.find({ id: req.query.id })
+      .sort({ time: -1 })
+      .then((data) => {
+        res.send({ data: data, code: 200, message: "获取成功" });
+      });
+  });
+});
+
+// 确认或拒绝好友请求、
+api.post("/confirmFriend", (req, res) => {
+  db.Personalinfo.find({ account: req.body.sendAccount }).then((data) => {
+    console.log(req.body);
+    if (req.body.type) {
+      db.Friends.updateOne(
+        {
+          cust_id: req.body.id,
+        },
+        {
+          $set: { "friends_list.$[elem].state": "agree" },
+        },
+        { arrayFilters: [{ "elem.friends_id": data[0].id }] }
+      ).then((data) => {
+        console.log(data, "41654654");
+      });
+      db.Friends.updateOne(
+        {
+          cust_id: data[0].id,
+        },
+        {
+          $set: { "friends_list.$[elem].state": "agree" },
+        },
+        { arrayFilters: [{ "elem.friends_id": req.body.id }] }
+      ).then((data) => {
+        console.log(data, "41654654");
+      });
+      res.send({
+        data: {},
+        code: 200,
+        message: "已同意对方请求，可以聊天了",
+      });
+    } else {
+      db.Friends.updateOne(
+        {
+          cust_id: req.body.id,
+        },
+        {
+          $set: { "friends_list.$[elem].state": "refuse" },
+        },
+        { arrayFilters: [{ "elem.friends_id": data[0].id }] }
+      ).then((res) => {});
+      db.Friends.updateOne(
+        {
+          cust_id: data[0].id,
+        },
+        {
+          $set: { "friends_list.$[elem].state": "refuse" },
+        },
+        { arrayFilters: [{ "elem.friends_id": req.body.id }] }
+      ).then((res) => {});
+      res.send({
+        data: {},
+        code: 200,
+        message: "已拒绝对方请求",
+      });
+    }
+    db.MyInfoList.updateOne(
+      { id: req.body.id },
+      { $set: { "infoList.$[elem].isRead": true } },
+      {
+        arrayFilters: [{ "elem.infoId": req.body.infoId }],
+      }
+    ).then((data) => {});
+  });
+});

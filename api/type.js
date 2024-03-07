@@ -45,11 +45,7 @@ let MyAttentionSchema = new mongoose.Schema({
 const MyAttention = mongoose.model("attentions", MyAttentionSchema);
 let friendsSchema = new mongoose.Schema({
   cust_id:String,
-  friends_list:[{
-    friends_id:String,
-    relation:String,
-    state:String,
-  }],
+  friends_list:Array,
  
 })
 const Friends = mongoose.model("friends", friendsSchema);
