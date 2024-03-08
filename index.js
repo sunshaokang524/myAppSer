@@ -469,7 +469,7 @@ api.post("/addFriends", (req, res) => {
                 },
               },
             }
-          ).then(res=>{});
+          ).then((res) => {});
           db.Friends.find({ cust_id: data[0].id }).then((info) => {
             if (info.length > 0) {
               //删除已存在的请求
@@ -484,7 +484,7 @@ api.post("/addFriends", (req, res) => {
                     },
                   },
                 }
-              ).then(res=>{});
+              ).then((res) => {});
             } else {
               let v = new db.Friends({
                 cust_id: data[0].id,
@@ -663,3 +663,77 @@ api.post("/confirmFriend", (req, res) => {
     ).then((data) => {});
   });
 });
+
+// 获取好友列表
+api.get("/getFriends", (req, res) => {
+  db.Friends.find({ cust_id: req.query.id })
+    .then((data) => {
+      // 确保data不为空，且至少有一个元素
+      if (data && data.length > 0) {
+        // 从第一个元素中取出friends_list，并过滤出状态为'agree'的项
+        let friendList = data[0].friends_list.filter(
+          (item) => item.state === "agree"
+        );
+
+        // 为每个朋友的friends_id创建查询promise的数组
+        let queries = friendList.map((item) => {
+          return db.Personalinfo.find({ id: item.friends_id }).then((info) => {
+            // 确保info不为空，且至少有一个元素
+            if (info && info.length > 0) {
+              // 从查询结果中取出所需信息，并返回构造好的对象
+              return {
+                nickName: info[0].nickname, // 假设nickName是info中的一个字段
+                avatar: info[0].avatar, // 假设avatar是info中的一个字段
+                account: info[0].account, // 假设account是info中的一个字段
+                age: info[0].age, // 假设age是info中的一个字段
+              };
+            } else {
+              // 如果查询结果为空，返回null或进行其他处理
+              return null;
+            }
+          });
+        });
+
+        // 使用Promise.all等待所有查询完成
+        Promise.all(queries)
+          .then((results) => {
+            // 过滤掉null值，得到最终的朋友列表
+            let friendInfoArray = results.filter((result) => result !== null);
+
+            // 发送响应
+            res.send({ data: friendInfoArray, code: 200, message: "获取成功" });
+          })
+          .catch((error) => {
+            // 如果有任何查询失败，处理错误
+            console.error("Error fetching personal info:", error);
+            res.status(500).send({ code: 500, message: "服务器错误" });
+          });
+      } else {
+        // 如果没有找到匹配的朋友，返回相应的错误信息
+        res.status(404).send({ code: 404, message: "未找到朋友信息" });
+      }
+    })
+    .catch((error) => {
+      // 如果初始的Friends查询失败，处理错误
+      console.error("Error fetching friends:", error);
+      res.status(500).send({ code: 500, message: "服务器错误" });
+    });
+});
+
+
+const WebSocket = require('ws');  
+const wss = new WebSocket.Server({ port: 8080 , host: '192.168.0.3'});  
+wss.on('connection', (ws) => {  
+  ws.on('message', (message) => {  
+    const data = JSON.parse(message);  
+    // console.log('Received message:', data,wss.clients);
+    // 处理接收到的消息，例如广播给所有连接的客户端  
+    wss.clients.forEach((client) => {  
+      // console.log('client:',client);
+      if (client !== ws && client.readyState === WebSocket.OPEN) {  
+        console.log('client56565656');
+        client.send(JSON.stringify(data));  
+      }  
+    });  
+  });   
+});  
