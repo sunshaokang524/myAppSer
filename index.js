@@ -11,7 +11,7 @@ const CryptoJS = require("crypto-js");
 const db = require("./api/type");
 const path = require("path");
 const AdmZip = require("adm-zip");
-
+require('./ws') 
 api.use(cors());
 
 api.use("/img", express.static("img"));
@@ -719,21 +719,3 @@ api.get("/getFriends", (req, res) => {
       res.status(500).send({ code: 500, message: "服务器错误" });
     });
 });
-
-
-const WebSocket = require('ws');  
-const wss = new WebSocket.Server({ port: 8080 , host: '192.168.0.3'});  
-wss.on('connection', (ws) => {  
-  ws.on('message', (message) => {  
-    const data = JSON.parse(message);  
-    // console.log('Received message:', data,wss.clients);
-    // 处理接收到的消息，例如广播给所有连接的客户端  
-    wss.clients.forEach((client) => {  
-      // console.log('client:',client);
-      if (client !== ws && client.readyState === WebSocket.OPEN) {  
-        console.log('client56565656');
-        client.send(JSON.stringify(data));  
-      }  
-    });  
-  });   
-});  
