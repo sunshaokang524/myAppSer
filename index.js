@@ -11,7 +11,7 @@ const CryptoJS = require("crypto-js");
 const db = require("./api/type");
 const path = require("path");
 const AdmZip = require("adm-zip");
-require('./ws') 
+
 api.use(cors());
 
 api.use("/img", express.static("img"));
@@ -691,7 +691,7 @@ api.get("/getFriends", (req, res) => {
               // 如果查询结果为空，返回null或进行其他处理
               return null;
             }
-          });
+          });  
         });
 
         // 使用Promise.all等待所有查询完成
@@ -719,3 +719,66 @@ api.get("/getFriends", (req, res) => {
       res.status(500).send({ code: 500, message: "服务器错误" });
     });
 });
+
+const { Server } = require("socket.io");
+const moment = require("moment");
+const server = require("http").createServer(api);
+const io = new Server(server, {
+  serveClient: false,
+  cors: {
+    origin: "*", // from the screenshot you provided
+    methods: ["GET", "POST"],
+  },
+});
+
+const chatList = [];
+
+api.post("/goLink", (req, res) => {
+  new Promise((resolve, reject) => {
+    let item = {};
+    db.Personalinfo.find({ account: req.body.myAccount })
+      .then((it) => {
+        // console.log(data,'1')
+        item["myItem"] = it[0];
+        resolve(it[0]);
+      })
+      .then((myItem) => {
+        console.log(myItem, "myItem");
+        db.Personalinfo.find({ account: req.body.targetAccount }).then(
+          (data) => {
+            // console.log(data,'2')
+            item["targetItem"] = data[0];
+            res.send({ data: item });
+            // resolve(item)
+          }
+        );
+      })
+      .finally(() => {
+      
+      });
+  });
+});
+io.on("connection", (socket) => {
+  socket.emit("fresh-message", chatList);
+
+  socket.on("send-message", (targetAccount, myAccount, message) => {
+    const createTime = moment().format("YYYY-MM-DD HH:mm:ss");
+
+    chatList.push({
+      targetAccount,
+      myAccount,
+      message, 
+      createTime,
+    }); 
+    // 更新所有连接的客户端的聊天记录
+    io.emit("fresh-message", chatList);
+  });
+}); 
+
+// 启动服务器并监听端口
+
+server.listen(3001, () => {
+  console.log("Server is running on port 3001");
+});
+// server.close();
+console.log("chatList", chatList);
