@@ -191,42 +191,46 @@ api.get("/dynamicstate", (req, res) => {
         .skip((req.query.pageNum - 1) * req.query.pageSize)
         .limit(req.query.pageSize)
         .then((data) => {
-          data.forEach(function (entry, i) {
-            let picList = [];
-
-            // 判断图片路径是否存在，存在则读取图片
-            if (entry.imgPath.length > 0) {
-              entry.imgPath.forEach(function (pic, i) {
-                const imagePath = path.join(extractPath, pic); // 假设图片文件名为image.jpg
-                const imageBuffer = fs
-                  .readFileSync(imagePath)
-                  .toString("base64");
-                picList.push("data:image/jpeg;base64," + imageBuffer);
+          data
+            .forEach(function (entry, i) {
+              let picList = [];
+              new Promise((resolve, reject) => {
+                // 判断图片路径是否存在，存在则读取图片
+                if (entry.imgPath.length > 0) {
+                  entry.imgPath.forEach(function (pic, i) {
+                    const imagePath = path.join(extractPath, pic); // 假设图片文件名为image.jpg
+                    const imageBuffer = fs
+                      .readFileSync(imagePath)
+                      .toString("base64");
+                    picList.push("data:image/jpeg;base64," + imageBuffer);
+                  });
+                }
+                // 将图片列表、内容、时间、是否点赞、昵称、信息id添加到数组中
+                arr.push({
+                  img: picList,
+                  content: entry.content,
+                  time: entry.time,
+                  isLike: false,
+                  nickname: entry.nickname,
+                  infoId: entry.infoId,
+                  account: entry.account,
+                });
+                resolve()
               });
-            }
-            // 将图片列表、内容、时间、是否点赞、昵称、信息id添加到数组中
-            arr.push({
-              img: picList,
-              content: entry.content,
-              time: entry.time,
-              isLike: false,
-              nickname: entry.nickname,
-              infoId: entry.infoId,
-              account: entry.account,
-            });
-          });
-
-          // 删除解压目录
-          fsp
-            .rm(extractPath, { recursive: true, force: true })
-            .then(() => {
-              console.log(
-                "Directory and its contents deleted successfully:",
-                extractPath
-              );
             })
-            .catch((err) => {
-              console.error("Error deleting directory:", err);
+            .finally(() => {
+              // 删除解压目录
+              fsp
+                .rm(extractPath, { recursive: true, force: true })
+                .then(() => {
+                  console.log(
+                    "Directory and its contents deleted successfully:",
+                    extractPath
+                  );
+                })
+                .catch((err) => {
+                  console.error("Error deleting directory:", err);
+                });
             });
 
           // 判断是否点赞
@@ -691,7 +695,7 @@ api.get("/getFriends", (req, res) => {
               // 如果查询结果为空，返回null或进行其他处理
               return null;
             }
-          });  
+          });
         });
 
         // 使用Promise.all等待所有查询完成
@@ -753,9 +757,7 @@ api.post("/goLink", (req, res) => {
           }
         );
       })
-      .finally(() => {
-      
-      });
+      .finally(() => {});
   });
 });
 io.on("connection", (socket) => {
@@ -767,13 +769,13 @@ io.on("connection", (socket) => {
     chatList.push({
       targetAccount,
       myAccount,
-      message, 
+      message,
       createTime,
-    }); 
+    });
     // 更新所有连接的客户端的聊天记录
     io.emit("fresh-message", chatList);
   });
-}); 
+});
 
 // 启动服务器并监听端口
 

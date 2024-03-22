@@ -11,7 +11,6 @@
     "mongoose": "^8.1.1",
     "node-uuid": "^1.4.8",
     "socket.io": "^4.7.4",
-    "type": "module",
     "ws": "^8.16.0"
   }
 }
