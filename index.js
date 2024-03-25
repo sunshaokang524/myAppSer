@@ -11,7 +11,7 @@ const CryptoJS = require("crypto-js");
 const db = require("./api/type");
 const path = require("path");
 const AdmZip = require("adm-zip");
-
+ 
 api.use(cors());
 
 api.use("/img", express.static("img"));
@@ -191,10 +191,10 @@ api.get("/dynamicstate", (req, res) => {
         .skip((req.query.pageNum - 1) * req.query.pageSize)
         .limit(req.query.pageSize)
         .then((data) => {
+          new Promise((resolve, reject) => {
           data
             .forEach(function (entry, i) {
               let picList = [];
-              new Promise((resolve, reject) => {
                 // 判断图片路径是否存在，存在则读取图片
                 if (entry.imgPath.length > 0) {
                   entry.imgPath.forEach(function (pic, i) {
@@ -784,3 +784,4 @@ server.listen(3001, () => {
 });
 // server.close();
 console.log("chatList", chatList);
+
